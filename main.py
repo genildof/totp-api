@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pyotp import TOTP
 import os
 import base64
+import time
 
 app = FastAPI(
     title="TOTP Generator API",
@@ -11,10 +12,9 @@ app = FastAPI(
 )
 
 security = HTTPBearer()
-API_TOKEN = os.getenv("API_TOKEN", "seu-token-secreto-aqui")  # Configure no ambiente
+API_TOKEN = os.getenv("API_TOKEN", "M5SW42LMMRXWMZLSOJSWS4TB")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verifica se o token fornecido é válido."""
     if credentials.credentials != API_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -23,10 +23,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         )
     return True
 
-@app.get("/totp",
-         response_model=dict,
-         summary="Gera um código TOTP",
-         description="Recebe um segredo Base32 e retorna um código TOTP de 6 dígitos.")
+@app.get("/totp", response_model=dict)
 async def generate_totp(secret: str, authenticated: bool = Depends(verify_token)):
     """
     Gera um código TOTP baseado no segredo fornecido.
@@ -35,28 +32,26 @@ async def generate_totp(secret: str, authenticated: bool = Depends(verify_token)
         secret (str): Segredo Base32 do TOTP (ex.: obtido do Microsoft Authenticator).
 
     Returns:
-        dict: {"code": "xxxxxx"} com o código de 6 dígitos.
-
-    Raises:
-        HTTPException: Se o segredo for inválido ou houver erro na geração.
+        dict: {"code": "xxxxxx", "timestamp": <unix_timestamp>}
     """
-    # Validação básica do segredo Base32
-    if not secret or len(secret) < 16:  # Segredos TOTP geralmente têm 16+ caracteres
+    if not secret or len(secret) < 16:
         raise HTTPException(status_code=400, detail="Segredo Base32 inválido: muito curto ou vazio")
     try:
-        # Verifica se o segredo é um Base32 válido (remove padding '=' se presente)
-        secret = secret.replace("=", "").upper()
-        base64.b32decode(secret, casefold=True)  # Levanta exceção se não for Base32
+        # Remove padding '=' e valida como Base32, sem alterar caso
+        secret_clean = secret.replace("=", "")
+        base64.b32decode(secret_clean, casefold=True)
     except Exception:
-        raise HTTPException(status_code=400, detail="Segredo Base32 inválido: deve ser codificado em Base32")
+        raise HTTPException(status_code=400, detail="Segredo Base32 inválido: deve ser Base32")
 
     try:
-        totp = TOTP(secret)
-        code = totp.now()  # Gera o código atual
-        return {"code": code}
+        totp = TOTP(secret_clean)
+        code = totp.now()
+        timestamp = int(time.time())  # Timestamp atual em segundos
+        print(f"Gerado TOTP: {code} para segredo {secret_clean} em {timestamp}")
+        return {"code": code, "timestamp": timestamp}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erro ao gerar TOTP: {str(e)}")
 
-@app.get("/health", summary="Verifica se a API está ativa")
+@app.get("/health")
 async def health_check():
     return {"status": "ok"}
