@@ -25,28 +25,18 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 @app.get("/totp", response_model=dict)
 async def generate_totp(secret: str, authenticated: bool = Depends(verify_token)):
-    """
-    Gera um código TOTP baseado no segredo fornecido.
-
-    Args:
-        secret (str): Segredo Base32 do TOTP (ex.: obtido do Microsoft Authenticator).
-
-    Returns:
-        dict: {"code": "xxxxxx", "timestamp": <unix_timestamp>}
-    """
     if not secret or len(secret) < 16:
         raise HTTPException(status_code=400, detail="Segredo Base32 inválido: muito curto ou vazio")
     try:
-        # Remove padding '=' e valida como Base32, sem alterar caso
         secret_clean = secret.replace("=", "")
         base64.b32decode(secret_clean, casefold=True)
     except Exception:
         raise HTTPException(status_code=400, detail="Segredo Base32 inválido: deve ser Base32")
 
     try:
-        totp = TOTP(secret_clean)
+        totp = pyotp.TOTP(secret_clean, interval=30, digits=6, digest="sha1")  # Parâmetros explícitos
         code = totp.now()
-        timestamp = int(time.time())  # Timestamp atual em segundos
+        timestamp = int(time.time())
         print(f"Gerado TOTP: {code} para segredo {secret_clean} em {timestamp}")
         return {"code": code, "timestamp": timestamp}
     except Exception as e:
