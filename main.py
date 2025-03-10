@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pyotp import TOTP
+from pyotp import TOTP  # Importação correta
 import os
 import base64
 import time
@@ -25,6 +25,15 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 @app.get("/totp", response_model=dict)
 async def generate_totp(secret: str, authenticated: bool = Depends(verify_token)):
+    """
+    Gera um código TOTP baseado no segredo fornecido.
+
+    Args:
+        secret (str): Segredo Base32 do TOTP (ex.: obtido do Microsoft Authenticator).
+
+    Returns:
+        dict: {"code": "xxxxxx", "timestamp": <unix_timestamp>}
+    """
     if not secret or len(secret) < 16:
         raise HTTPException(status_code=400, detail="Segredo Base32 inválido: muito curto ou vazio")
     try:
@@ -34,7 +43,7 @@ async def generate_totp(secret: str, authenticated: bool = Depends(verify_token)
         raise HTTPException(status_code=400, detail="Segredo Base32 inválido: deve ser Base32")
 
     try:
-        totp = pyotp.TOTP(secret_clean, interval=30, digits=6, digest="sha1")  # Parâmetros explícitos
+        totp = TOTP(secret_clean, interval=30, digits=6, digest="sha1")  # Chama TOTP diretamente
         code = totp.now()
         timestamp = int(time.time())
         print(f"Gerado TOTP: {code} para segredo {secret_clean} em {timestamp}")
